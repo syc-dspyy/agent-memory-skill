@@ -1,0 +1,198 @@
+# agent-memory-skill v1.3 · 安装说明
+
+> Agent 记忆系统技能（原 three-layer-memory）：主记忆（人格/规则/目录）· 经验（SOP/模板）· 事实（事件/知识）
+> **v1.2 核心：让 AI 自动存取记忆，并永远记得自己有这个记忆库。**
+> **v1.3 核心：记忆目录分深浅两层，给常驻上下文瘦身（省 token）。**
+
+---
+
+## v1.3 新增了什么（相比 v1.2）
+
+| 新增 | 解决什么问题 |
+|---|---|
+| **R14 目录分层** | 事件越多，常驻目录加载的 token 越多。现在目录拆成**深层**（近期 + 重要，每次必读）和**浅层**（久远 + 日常，按需读），久远小事不再天天占着上下文 |
+
+**新事件默认进深层**；久远（超 90 天）且不重要的自动下沉到浅层。
+
+★ 关键点：**事件文件本身不移动，只是目录行换了个位置**——所以 `links.md` 关联、事件路径、git 历史全部不受影响。
+
+规则从 R1–R13 扩到 **R1–R14**。
+
+### 前版特性（v1.2 保留）
+
+| 特性 | 解决什么问题 |
+|---|---|
+| **R11 自动触发** | AI 扫到信号就自己存取，不用你说"记住这个""去查记忆" |
+| **R12 留存分级** | 四级留存 + 四问判据，明确什么该长期记、什么不该入库 |
+| **R13 常驻锚点** | 上下文清空后 AI 也记得自己有记忆库（指针注入 `AGENTS.md`） |
+
+---
+
+## 一、安装技能
+
+1. 解压整个 `agent-memory-skill` 文件夹
+2. 放到：`C:\Users\<你的用户名>\.workbuddy\skills\agent-memory-skill\`
+3. **重启 WorkBuddy**（技能需重启才生效）
+
+装好后对话里说「记住这件事」「初始化记忆」等即会自动加载本技能。
+
+---
+
+## 二、三步建起你的记忆库
+
+### 第 1 步：初始化（★ 一定要带 `--anchor-target`）
+
+```bash
+cd agent-memory-skill/scripts
+
+python memory_init.py --root "D:/memory" --agent-name "小幕" --owner "M" \
+  --anchor-target "D:/你的项目/AGENTS.md"
+```
+
+- `--root` 记忆库放哪
+- `--agent-name` agent 名字
+- `--owner` 主人代号（**不写真名**）
+- `--anchor-target` **常驻锚点注入到哪个文件**，可多次传入
+
+选哪个文件？选**你这个 agent 每次会话都会自动加载的那个**：
+
+| 你在用什么 | 注入到 |
+|---|---|
+| WorkBuddy / Claude Code | `AGENTS.md` 或 `CLAUDE.md` |
+| Cursor | `.cursorrules` |
+| 其他 | 工作区 `MEMORY.md` |
+
+初始化会自动生成两份目录：
+
+```
+main/index.md           深层目录（近期 + 重要）—— 每次会话必读
+main/index-shallow.md   浅层目录（久远 + 日常）—— 按需读，起步时是空的
+```
+
+### 第 2 步：填两份不可重建的文件
+
+- `main/persona.md` —— 四段：我是谁 / 关于我的主人 / 我们的关系 / 身份识别（暗号只存 hint + sha256，**不写明文**）
+- `main/rules.md` —— R1–R14，重点看 **R11 自动触发 / R12 留存分级 / R13 常驻锚点 / R14 目录分层**，删掉不适用项、补你自己的标准
+
+其余文件（目录、知识、向量索引）都能重建，这两份不能。**填完立刻 `git init` 并提交。**
+
+### 第 3 步：校验
+
+```bash
+python memory_check.py --root "D:/memory"
+```
+
+看到 `0 error` 且 `W6 常驻锚点正常` 才算完成。
+
+---
+
+## 三、日常怎么用（AI 自动做，你不用管）
+
+装好 + 注入锚点后，AI 会**自动**：
+
+- 你说「我不喜欢长篇大论」→ 自动记进主人偏好（会先跟你确认）
+- 你纠正它 → 自动写事件，可复用的提炼成 SOP
+- 你提到「上次那个项目」→ 自动检索记忆目录后回答
+- 它要做决策/给建议 → 自动先读你的偏好和相关历史
+- 长会话结束前 → 自动盘点「这轮有什么该记的」
+
+**你不需要再说"记住这个""去查一下记忆"。** 如果还要你说，说明锚点没生效：
+
+```bash
+python memory_anchor.py --root "D:/memory" --check-all
+```
+
+---
+
+## 四、目录分层：深层与浅层（v1.3）
+
+| | **深层** `main/index.md` | **浅层** `main/index-shallow.md` |
+|---|---|---|
+| 装什么 | 近期（90 天内）+ 重要 + 手动锁定 | 久远且不重要 |
+| 读取 | 每次会话必读 | 深层没找到且问题涉久远小事时才读 |
+| 新记忆 | **默认进这里** | 只接收下沉的旧条目 |
+
+**什么时候启用浅层**：起步不用管（浅层是空的）；事件跨过几个月后 `rebuild` 会自动把老的不重要的沉下去；深层超过 60 条时 `memory_check.py` 会报 **W7** 提醒整理。
+
+**怎么手动调整**：
+
+```bash
+python memory_tier.py --root "D:/memory" --plan              # 看分层方案（不改）
+python memory_tier.py --root "D:/memory" --stats             # token 估算
+python memory_tier.py --root "D:/memory" --pin <slug>        # 锁定在深层，永不下沉
+python memory_tier.py --root "D:/memory" --promote <slug>    # 标重要 → 拉回深层
+python memory_tier.py --root "D:/memory" --demote <slug>     # 标日常 → 立即下沉
+python memory_index.py --root "D:/memory" --rebuild          # ★ 改完必须重建
+```
+
+**省多少 token**：每行目录约 30 token。100 条事件全常驻 ≈ 3000 token，分层后若深层 40 条 ≈ 1200，**省 60%**。时间窗改 `.memory-config.yaml` 的 `deep_window_days`。
+
+---
+
+## 五、常用命令
+
+```bash
+# 初始化（含锚点注入）
+python memory_init.py --root "D:/memory" --agent-name "小幕" --owner "M" --anchor-target "AGENTS.md"
+
+# 常驻锚点
+python memory_anchor.py --root "D:/memory" --print                  # 只看锚点内容
+python memory_anchor.py --root "D:/memory" --inject "AGENTS.md"     # 注入（幂等，不破坏原文件）
+python memory_anchor.py --root "D:/memory" --check-all              # 校验全部锚点
+python memory_anchor.py --remove "AGENTS.md"                        # 移除
+
+# 目录分层（v1.3）
+python memory_tier.py --root "D:/memory" --plan                     # 分层方案
+python memory_tier.py --root "D:/memory" --stats                    # token 估算
+python memory_tier.py --root "D:/memory" --pin <slug>               # 锁定在深层
+
+# 目录与校验
+python memory_index.py --rebuild --root "D:/memory"                 # 写完事件后重建（自动分层）
+python memory_index.py --stats --root "D:/memory"                   # 分层统计
+python memory_check.py --root "D:/memory"                           # 每次写入后校验
+```
+
+---
+
+## 六、文件清单
+
+```
+agent-memory-skill/
+├── SKILL.md                        主入口（v1.3）
+├── README.md                       本文件
+├── LICENSE                         MIT 许可证
+├── references/
+│   ├── layer-spec.md               三层字段定义、persona 四段、正反例
+│   ├── rules-spec.md               R1–R14 完整条文与违反处置
+│   ├── auto-trigger.md             ★v1.2 保存 T1–T11 / 读取 U1–U8 / 每轮流程 / 自检三问
+│   ├── retention-spec.md           ★v1.2 四级留存、四问判据、必写与不写清单
+│   ├── index-tiering.md            ★v1.3 深浅目录方案、分层判据、token 账、常见错误
+│   ├── retrieval-protocol.md       漏斗详解（含浅层缓冲）、向量检索接法、降级策略
+│   ├── linking-spec.md             串联六种关系、links.md 规范
+│   ├── integration-mcp.md          MCP 与外部平台对接
+│   └── anti-loss.md                备份、重建演练、git 化
+├── scripts/
+│   ├── memory_init.py              初始化（--anchor-target / --owner / --migrate）
+│   ├── memory_anchor.py            ★v1.2 常驻锚点：注入 / 校验 / 移除
+│   ├── memory_tier.py              ★v1.3 目录分层：plan / stats / pin / promote / demote
+│   ├── memory_index.py             目录索引重建（双层 + --stats）
+│   └── memory_check.py             校验（含 W6 锚点、E6 重复登记、W7 深层过长）
+└── assets/templates/
+    ├── persona.md.tmpl             人格四段
+    ├── rules.md.tmpl               规范规则 R1–R14
+    ├── memory-anchor.md.tmpl       ★v1.2 常驻锚点
+    ├── event.md.tmpl               事件五段（含 retention / importance 字段）
+    ├── methodology.md.tmpl         方法论 SOP
+    └── qa-template.md.tmpl         问答模板
+```
+
+---
+
+## 七、v1.2 用户升级须知
+
+1. 覆盖 `scripts/`、`references/`、`assets/` 全部文件
+2. `main/rules.md` 追加 **R14 目录分层** 一段（从 `assets/templates/rules.md.tmpl` 拷）
+3. 跑一次 `memory_index.py --rebuild`，会自动生成 `main/index-shallow.md` 并完成分层
+4. 跑 `memory_check.py`，确认 0 error、W6 通过
+
+**旧库数据完全不受影响**——事件文件一个都不会动，只是目录行多了个去处。
