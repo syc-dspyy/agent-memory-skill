@@ -8,6 +8,10 @@ method: <若沉淀出方法论，填文件名，如 local-model-tuning>
 retention: <long | mid | permanent，默认 long（R12 留存分级）>
 importance: <high | normal | low，默认 normal（R14：决定进深层还是浅层）>
 # pinned: true   ← 可选：强制留在深层目录，永不下沉（R14.4）
+# led_to: <slug，本事件取代/推翻的旧事件；与旧事件的 invalidated_by 成对写>
+# invalidated_by: <slug，推翻本事件的新事件；空表示仍有效（失效窗，搭配 led_to 使用）>
+# access_count: 0      ← 被读取次数（memory_tier --bump 维护，热度分层参考）
+# last_access: <YYYY-MM-DD>  ← 上次读取日期（--bump 自动写）
 ---
 
 # <事件标题>
@@ -30,6 +34,7 @@ importance: <high | normal | low，默认 normal（R14：决定进深层还是�
 ## 关联
 - ← 起因：[<事件名>](YYYYMMDD-<slug>.md)
 - → 导致：[<事件名或方法论>](../../experience/methodology/<name>.md)
+- → 推翻/替代：[<旧事件名>](YYYYMMDD-<旧slug>.md)   ← 配 frontmatter 的 led_to 用
 - ～ 相关：[<事件名>](YYYYMMDD-<slug>.md)
 
 <!-- 写完必做：

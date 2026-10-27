@@ -9,6 +9,10 @@
 新事件默认进深层；深层积累到一定量后，久远且不重要的条目下沉到浅层。
 ★ 事件文件本身不移动，只是"目录行"归到哪一层 —— 所以 links.md 完全不受影响。
 
+★ 标签速览（v1.3.3 优化）：深层事件 ≥30 条时，rebuild 会在 main/index.md 自动追加
+  「标签速览」分组块（AUTO:tags），按主标签聚合 slug，扫目录更快；事件变少时自动移除。
+
+
 用法
 ----
     python3 memory_index.py --root <root> --rebuild    # 重建两层目录
@@ -131,12 +135,70 @@ def collect_events(root):
                 "summary": fm.get("summary", "（缺 summary）"),
                 "emotion": fm.get("emotion", ""),
                 "method": fm.get("method", ""),
+                "tags": fm.get("tags", ""),
+                "retention": fm.get("retention", ""),
                 "importance": fm.get("importance", ""),
                 "pinned": fm.get("pinned", ""),
+                "access_count": fm.get("access_count", ""),
+                "last_access": fm.get("last_access", ""),
+                "invalidated_by": fm.get("invalidated_by", ""),
             }
         )
     items.sort(key=lambda x: x["date"], reverse=True)
     return items
+
+
+def parse_tags(raw):
+    """'[本地模型, 性能优化]' → ['本地模型', '性能优化']。"""
+    if not raw:
+        return []
+    s = str(raw).strip().strip("[]")
+    return [t.strip() for t in s.split(",") if t.strip()]
+
+
+TAG_START = "<!-- AUTO:tags -->"
+TAG_END = "<!-- /AUTO:tags -->"
+
+
+def build_tag_overview(items):
+    """深层目录按主标签分组，便于快速定位（事件较多时扫描更快）。"""
+    groups = {}
+    for it in items:
+        tags = parse_tags(it.get("tags", ""))
+        primary = tags[0] if tags else "未分类"
+        groups.setdefault(primary, []).append(it["slug"])
+    lines = ["### 🏷️ 标签速览（深层 · 按主标签分组 · 快速定位）"]
+    for tag in sorted(groups, key=lambda k: (-len(groups[k]), k)):
+        slugs = ", ".join(sorted(groups[tag]))
+        lines.append(f"- **{tag}**（{len(groups[tag])}）：{slugs}")
+    return "\n".join(lines)
+
+
+def upsert_block(path, start, end, body):
+    """插入/替换文件中的 AUTO 区块（标签速览用）。"""
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    block = f"{start}\n{body}\n{end}"
+    if start in content and end in content:
+        pat = re.compile(re.escape(start) + r".*?" + re.escape(end), re.S)
+        new_content = pat.sub(lambda _: block, content)
+    else:
+        new_content = content.rstrip() + "\n\n" + block + "\n"
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(new_content)
+
+
+def remove_block(path, start, end):
+    """移除文件中的 AUTO 区块（深层事件变少时清掉标签速览）。"""
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    if start in content and end in content:
+        pat = re.compile(re.escape(start) + r".*?" + re.escape(end) + r"\n?", re.S)
+        new_content = pat.sub("", content)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(new_content)
 
 
 def build_table(items, empty_hint="<!-- 暂无事件 -->"):
@@ -223,6 +285,13 @@ def rebuild(root, dry=False, stats=False):
         build_table(shallow, "<!-- 暂无事件。事件超出深层时间窗且非重要后会自动归入此处 -->"),
         today,
     )
+
+    # 标签速览：深层事件较多时按主标签分组，加速扫描（事件 <30 则移除旧块）
+    if len(deep) >= 30:
+        upsert_block(idx_path, TAG_START, TAG_END, build_tag_overview(deep))
+        print(f"[rebuild] 深层标签速览已追加（{len(deep)} 条 · 按主标签分组）")
+    else:
+        remove_block(idx_path, TAG_START, TAG_END)
 
     print(f"[rebuild] 深层 {len(deep)} 条 → main/index.md")
     print(f"[rebuild] 浅层 {len(shallow)} 条 → main/index-shallow.md")

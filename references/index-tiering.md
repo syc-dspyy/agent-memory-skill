@@ -84,7 +84,50 @@ python3 scripts/memory_index.py --root <root> --rebuild          # ★ 改完必
 | 同一事件两层都写了 | 检索重复、统计错乱（报 E6） | rebuild 会自动去重，别手抄 |
 | 深层堆到几百条还不整理 | 常驻 token 爆掉 | 看 W7 提醒，用 `--demote` 或调小时间窗 |
 
-## 八、与检索漏斗的关系
+## 八、热度分层：常用的旧事不下沉（v1.3.3 优化）
+
+时间窗和 `importance` 决定分层，但有个盲区：**被反复查阅的旧事件**会随时间长沉进浅层，每次要用又得去浅层捞。热度分层补上这一维——给事件记"被读过几次、上次读是什么时候"，让**常用旧事可凭热度拉回深层**。
+
+事件 frontmatter 新增两个可选字段（由脚本维护，不手填）：
+
+```yaml
+access_count: 0          # 被读取次数（memory_tier --bump 自增）
+last_access: 2026-10-27  # 上次读取日期（--bump 自动写）
+```
+
+用法：
+
+```bash
+python3 scripts/memory_tier.py --root <root> --heat           # 按访问次数排，看谁常用
+python3 scripts/memory_tier.py --root <root> --bump <slug>    # 读完一个事件后自增其热度
+```
+
+**判定建议**（人工决策，不在 rebuild 自动改层）：
+
+- 浅层里 `access_count` 高（如 ≥5）且近期 `last_access` 近的事件 → 该 `--promote` 回深层
+- 深层里 `access_count` 长期为 0、又超时间窗、又非重要的事件 → 可考虑 `--demote`
+
+⚠️ 热度**只作建议**，不自动改层——分层最终仍以时间窗 + 重要性为主，避免"读一次就被钉死在深层"。
+
+---
+
+## 九、深层标签速览：事件多时扫得更快（v1.3.3 优化）
+
+深层事件一旦超过 30 条，逐行扫目录就变慢。`memory_index.py --rebuild` 会在 `main/index.md` 自动追加一个「🏷️ 标签速览」分组块（标记 `AUTO:tags`），按**主标签**聚合事件 slug：
+
+```markdown
+### 🏷️ 标签速览（深层 · 按主标签分组 · 快速定位）
+- **记忆系统**（12）：agent-memory-skill-v12, memory-system-rebuild, …
+- **性能优化**（5）：local-model-speedup, gpu-upgrade, …
+```
+
+- 只在深层 ≥30 条时生成；事件变少会自动移除（rebuild 幂等）
+- 它与下方事件表互补：表看"具体发生了什么"，速览看"哪类事多、该先扫哪类"
+- 浅层不生成（浅层本就按需、量少）
+
+---
+
+## 十、与检索漏斗的关系
 
 ```
 L0 常驻  →  persona + rules + 【深层 index.md】        ← 浅层不在这里

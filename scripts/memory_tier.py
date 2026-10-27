@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""深浅目录分层管理（v1.3 · R14）。
+"""深浅目录分层管理（v1.3.3 · R14 + 热度分层）。
 
 解决的问题
 -----------
@@ -17,6 +17,8 @@
     python3 memory_tier.py --root <root> --unpin <slug>         # 解锁
     python3 memory_tier.py --root <root> --promote <slug>       # ⭐ 标为重要（浅层→深层）
     python3 memory_tier.py --root <root> --demote <slug>        # 标为日常（立即下沉）
+    python3 memory_tier.py --root <root> --heat                 # 🔥 按访问次数排，看谁常用
+    python3 memory_tier.py --root <root> --bump <slug>          # 读完事件后自增其热度
 
     改完 frontmatter 后需 `memory_index.py --rebuild` 才生效（本脚本会提示）。
 
@@ -152,6 +154,68 @@ def do_stats(root):
     return 0
 
 
+def parse_count(raw):
+    """把 frontmatter 里的 access_count 读成整数，读不出就当 0。
+
+    ★ 容错很重要：手写 YAML 常带行尾注释（`access_count: 3  # 已读三次`），
+    直接 int() 会 ValueError 把整条命令弄崩。这里取前导数字，其余情况统统按 0（并提示）。
+    """
+    s = str(raw or "").strip()
+    if not s:
+        return 0, False
+    m = re.match(r"^(\d+)", s)
+    if m:
+        return int(m.group(1)), True
+    return 0, False
+
+
+def do_heat(root):
+    """按访问次数排序，看哪些事件被反复查阅（热度分层参考）。"""
+    w = read_window_days(root)
+    items = collect_events(root)
+    if not items:
+        print("[heat] 暂无事件")
+        return 0
+    bad = []
+    ranked = sorted(
+        items,
+        key=lambda x: (parse_count(x.get("access_count", "0"))[0], x["date"]),
+        reverse=True,
+    )
+    print(f"[热度分层参考] {root}（访问次数降序）\n")
+    for i in ranked:
+        cnt, ok = parse_count(i.get("access_count", "0"))
+        if not ok and str(i.get("access_count", "")).strip():
+            bad.append(f"{i['slug']}（access_count={i.get('access_count')!r}）")
+        la = i.get("last_access") or "—"
+        tier = "深层" if tier_of(i, w) == "deep" else "浅层"
+        flag = " ← 浅层却常用，建议 --promote" if (tier == "浅层" and cnt >= 5) else ""
+        print(f"  {cnt:>3} 次 · 末读 {la} · {tier} · {i['slug']}{flag}")
+    print("\n  说明：--bump 在每次读取事件后自增访问次数；高访问的浅层事件可 --promote 回深层。")
+    if bad:
+        print(f"  ⚠ {len(bad)} 条事件的 access_count 读不出数字，已按 0 计：{', '.join(bad[:3])}")
+        print("     （常见原因：写了行尾注释或中文。写成 `access_count: 3` 即可）")
+    return 0
+
+
+def do_bump(root, slug):
+    """读完一个事件后调用：访问次数 +1，记录末读日期。"""
+    path, it = find_file(root, slug)
+    if not path:
+        print(f"  ✗ 找不到 slug 为「{slug}」的事件")
+        return 1
+    cnt, ok = parse_count(it.get("access_count", "0"))
+    cnt += 1
+    today = date.today().isoformat()
+    set_field(path, "access_count", str(cnt))
+    set_field(path, "last_access", today)
+    print(f"  ✓ 热度 +1 → {slug}（access_count={cnt}, last_access={today}）")
+    if not ok and str(it.get("access_count", "")).strip():
+        print(f"    ⚠ 原值 {it.get('access_count')!r} 读不出数字，已重置为 {cnt}（写法应为 `access_count: 3`）")
+    print("    ⚠ --bump 会改事件文件，建议按周期批量 bump 后一次 git commit，避免历史被'读'刷满")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="深浅目录分层管理（v1.3 · R14）")
     ap.add_argument("--root", required=True, help="记忆根目录")
@@ -161,12 +225,19 @@ def main():
     ap.add_argument("--unpin", metavar="SLUG", help="解除锁定")
     ap.add_argument("--promote", metavar="SLUG", help="标为重要（浅层→深层）")
     ap.add_argument("--demote", metavar="SLUG", help="标为日常（立即下沉）")
+    ap.add_argument("--heat", action="store_true", help="按访问次数排序，看谁常用")
+    ap.add_argument("--bump", metavar="SLUG", help="读完事件后自增其访问热度")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
     if not os.path.isdir(root):
         print(f"[error] 目录不存在: {root}")
         return 1
+
+    if args.heat:
+        return do_heat(root)
+    if args.bump:
+        return do_bump(root, args.bump)
 
     changed = False
     for act, slug, key, val in (

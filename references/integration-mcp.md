@@ -22,17 +22,20 @@ main/ · experience/ · facts/
 
 在 `integrations/mcp.md` 声明暴露的工具。建议最小集：
 
-| 工具 | 作用 | 落到哪层 | 是否需要确认 |
-|---|---|---|---|
-| `memory_recall` | 按三级漏斗检索记忆 | 只读 | 否 |
-| `memory_verify_owner` | 身份核验：比对暗号哈希；**不落盘、不回显答案** | 无 | 否（失败时写一条安全事件） |
-| `memory_write_event` | 写事件详情 | facts/events + index + links | 否（但会同步更新目录与关联） |
-| `memory_write_method` | 写方法论 | experience/methodology | 否（需含验收标准） |
-| `memory_link` | 补一条事件关联 | facts/links.md | 否（双向自动互写） |
-| `memory_read_persona` | 读人格 + 主人档案 + 规范规则 | main/ | 否 |
-| `memory_update_persona` | 改人格 / 主人档案 / 身份识别 / 规范规则 | main/ | **是**（必须人工确认） |
+| 工具 | 作用 | 落到哪层 | 副作用 / 幂等 | 是否需要确认 |
+|---|---|---|---|---|
+| `memory_recall` | 按四级漏斗检索记忆 | 只读 | 只读 · 幂等 | 否 |
+| `memory_verify_owner` | 身份核验：比对暗号哈希；**不落盘、不回显答案** | 无 | 只读 · 幂等（失败才写安全事件） | 否 |
+| `memory_write_event` | 写事件详情 | facts/events + index + links | 改写（新增事件+目录+关联）· 同 slug 可覆盖 | 否（但会同步更新目录与关联） |
+| `memory_write_method` | 写方法论 | experience/methodology | 改写 · 可重复 | 否（需含验收标准） |
+| `memory_link` | 补一条事件关联 | facts/links.md | 改写（追加关联）· 幂等（重复写同一条无副作用） | 否（双向自动互写） |
+| `memory_read_persona` | 读人格 + 主人档案 + 规范规则 | main/ | 只读 · 幂等 | 否 |
+| `memory_update_persona` | 改人格 / 主人档案 / 身份识别 / 规范规则 | main/ | 改写 main/ · 幂等（确认后生效） | **是**（必须人工确认） |
 
 **`memory_update_persona` 必须走确认**——这是唯一不可重建的层，被外部 AI 改坏就真坏了。
+
+> 副作用标注说明：接入方据此判断风险——带「改写」的工具会动记忆文件，应加审计 / 限频；带「幂等」的工具重复调用不产生额外副作用，可安全重试。
+> 注：检索漏斗已扩为四级（L0 常驻 → L1 深层 → L1.5 浅层 → L2 向量），见 `retrieval-protocol.md`。
 
 ### 接口侧的身份规则（v1.1）★
 
@@ -44,7 +47,7 @@ main/ · experience/ · facts/
 ### MCP 服务器最小实现要点
 
 - 三个工具就够跑通闭环：`memory_recall` / `memory_write_event` / `memory_read_persona`
-- 实现参考本机已有的零依赖写法：`D:/bendibushu/tools/ollama-mcp-server.mjs`（stdio 协议，直接复用其骨架）
+- 实现参考：写一个 stdio 协议的零依赖 Node/Python 脚本即可（约 50 行），无需引入框架
 - 注册位置：`~/.workbuddy/mcp.json`（**注意：只在应用启动时读取，改完需重启**）
 - 若对外暴露（非 localhost），必须加鉴权；本机 stdio 模式无需鉴权
 

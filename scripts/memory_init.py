@@ -6,6 +6,9 @@
     python3 memory_init.py --root "D:/memory" --knowledge-base "IMA:我的知识库"
     python3 memory_init.py --root "D:/memory" --migrate      # v1.0 boundaries.md → rules.md
 
+    # R15：persona.md / rules.md 不可重建，--force 也不覆盖；确需重建才用 --force-main
+    python3 memory_init.py --root "D:/memory" --force-main   # 会先自动备份为 .bak-<时间戳>
+
     # ★强烈推荐：注入常驻锚点，让 AI 每次会话都记得自己有记忆库（R13）
     python3 memory_init.py --root "D:/memory" --anchor-target "D:/项目/AGENTS.md"
     python3 memory_init.py --root "D:/memory" --anchor-target "AGENTS.md" --anchor-target "CLAUDE.md"
@@ -15,12 +18,15 @@
     + facts/links.md + integrations/ + .memory-config.yaml
 
 幂等: 已存在的文件不覆盖（除非 --force）
+      ★例外（R15）：main/persona.md 与 main/rules.md 不可重建，--force 也**不会**覆盖；
+        确需重建用 --force-main（会先备份为 .bak-<时间戳>）
 模板: 优先读 assets/templates/*，读不到则退回内置简版
 """
 import argparse
 import os
+import shutil
 import sys
-from datetime import date
+from datetime import date, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -154,7 +160,7 @@ MCP = """# MCP 与外部接口
 
 | 工具 | 作用 | 落到 | 需确认 |
 |---|---|---|---|
-| memory_recall | 三级漏斗检索 | 只读 | 否 |
+| memory_recall | 四级漏斗检索 | 只读 | 否 |
 | memory_write_event | 写事件 | facts/events + index + links | 否 |
 | memory_write_method | 写方法论 | experience/methodology | 否（需含验收标准） |
 | memory_link | 补关联（双向自动互写） | facts/links.md | 否 |
@@ -196,7 +202,7 @@ log_failed_verification: true
 
 # 自动触发：出现保存/读取信号时不等指令自动读写（rules.md R11）
 auto_trigger: true
-# 会话收尾前是否做盘点补漏（R11.6 / T10）
+# 会话收尾是否做收尾三动作：盘点 / 反思 / 交接（R11.6 / T10）
 session_wrapup_scan: true
 
 # 目录分层（v1.3 · R14）：深层装近期+重要（常驻），浅层装久远+日常（按需）
@@ -217,6 +223,18 @@ MIGRATE_HEADER = """
 > 归并完成后删除本节，并删除或重命名 `main/boundaries.md`。
 
 """
+
+# ★🔴 不可重建文件：默认 --force 也绝不动，必须显式 --force-main（且先自动备份）
+# 依据 anti-loss.md 的备份等级表与 R15.5 —— 这两个文件丢了就真的没了。
+PROTECTED = {"main/persona.md", "main/rules.md"}
+
+
+def backup_file(path):
+    """把现有文件备份为 <file>.bak-<YYYYMMDD-HHMMSS>，返回备份路径。"""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    bak = f"{path}.bak-{stamp}"
+    shutil.copy2(path, bak)
+    return bak
 
 
 def load_template(filename):
@@ -243,8 +261,16 @@ def main():
         metavar="FILE",
         help="★注入常驻锚点的目标文件（可多次传入），如 AGENTS.md / CLAUDE.md / MEMORY.md",
     )
-    ap.add_argument("--force", action="store_true", help="覆盖已存在文件")
+    ap.add_argument("--force", action="store_true", help="覆盖已存在文件（★不含 main/ 下不可重建文件）")
+    ap.add_argument(
+        "--force-main",
+        action="store_true",
+        help="★极高危：连 persona.md / rules.md 一起重建（会先自动备份为 .bak-<时间戳>）",
+    )
     args = ap.parse_args()
+
+    if args.force_main and not args.force:
+        args.force = True  # --force-main 隐含 --force
 
     root = os.path.abspath(args.root)
     today = date.today().isoformat()
@@ -274,12 +300,28 @@ def main():
         ),
     }
 
-    created, skipped = [], []
+    if args.force_main:
+        print("  " + "⚠" * 30)
+        print("  ⚠ --force-main 会重建 main/persona.md 与 main/rules.md")
+        print("  ⚠ 🔴 这两份是唯一不可重建的文件，重建即丢失既有内容（脚本会自动备份为 .bak-<时间戳>）")
+        print("  ⚠ 按 R15：若用户在别处已有人格设定，绝不能覆盖——请先读取并询问是否沿用")
+        print("  " + "⚠" * 30)
+
+    created, skipped, protected = [], [], []
     for rel, content in files.items():
         path = os.path.join(root, rel)
-        if os.path.exists(path) and not args.force:
-            skipped.append(rel)
-            continue
+        exists = os.path.exists(path)
+        if exists:
+            if rel in PROTECTED and not args.force_main:
+                # R15.5：--force 也绝不覆盖；只有 --force-main 才放行
+                protected.append(rel)
+                continue
+            if not args.force:
+                skipped.append(rel)
+                continue
+            if rel in PROTECTED:
+                bak = backup_file(path)
+                print(f"  ⛨ 已备份 {rel} → {os.path.basename(bak)}")
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
         created.append(rel)
@@ -305,20 +347,20 @@ def main():
     print(f"[memory_init] 根目录: {root}")
     for c in created:
         print(f"  + 创建 {c}")
+    if "main/index.md" in created:
+        print("     ⚠ index.md 被重置：『方法快捷入口』手写区也清了，沉淀方法论后要重填")
     for s in skipped:
-        print(f"  = 跳过 {s}（已存在，需覆盖加 --force）")
+        print(f"  = 跳过 {s}（已存在；覆盖加 --force）")
 
-    # R15：人格设定保护 —— 已存在 persona.md 时绝不 --force 覆盖
-    if "main/persona.md" in skipped:
-        print(
-            "  ⚠ R15 人格设定 persona.md 已存在：禁止用 --force 覆盖！"
-        )
-        print(
-            "     若用户已在别处设置过人格，请先读取该设定，并询问用户是否沿用（rules.md R15），"
-        )
-        print(
-            "     在用户明确选择前不自动套用、不替换。"
-        )
+    # R15：人格设定保护 —— persona.md / rules.md 默认连 --force 都不让覆盖
+    if protected:
+        print("  🔒 R15 保护：以下文件已存在，--force 也**不会**覆盖（它们不可重建）：")
+        for p in protected:
+            print(f"     - {p}")
+        if args.force:
+            print("     你用了 --force，但这两个文件被保护。确需重建请加 --force-main（会先自动备份）。")
+        print("     若用户在别处已有人格设定：先读取它，再询问用户是否沿用（rules.md R15.2），")
+        print("     在用户明确选择前不自动套用、不替换。")
 
     # v1.2：注入常驻锚点（R13）——不做这一步，新会话会忘记自己有记忆库
     if args.anchor_target:
@@ -340,7 +382,7 @@ def main():
 
     print("\n下一步：")
     print("  1. 填 main/persona.md：我是谁 / 主人档案 / 我们的关系 / 身份识别（暗号存 hint+哈希）")
-    print("  2. 填 main/rules.md：R1–R14，重点是 R11 自动触发 / R12 留存分级 / R13 常驻锚点 / R14 目录分层")
+    print("  2. 填 main/rules.md：R1–R15，重点是 R11 自动触发 / R12 留存分级 / R13 常驻锚点 / R14 目录分层 / R15 人格设定保护")
     if not args.anchor_target:
         print("  ★ 还没注入常驻锚点！强烈建议执行（否则新会话会忘记记忆库）：")
         print(f"    python3 scripts/memory_anchor.py --root \"{root}\" --inject \"<你的 AGENTS.md 或 CLAUDE.md>\"")

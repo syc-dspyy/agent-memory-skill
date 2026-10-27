@@ -1,12 +1,12 @@
 ---
 name: agent-memory-skill
 slug: agent-memory-skill
-version: 1.3.1
+version: 1.3.4
 displayName: Agent 记忆系统技能
-description: Agent 记忆系统技能。当用户要求「记住这件事」「回忆/查记忆」「养 agent 人格」「配置记忆系统」「初始化记忆目录」「写记忆」「防失忆」「给 agent 加长期记忆」「记住我是谁/怎么认出我」「给 agent 定规矩」「让 AI 自动保存/自动读取记忆」「什么时候该记下来」「哪些记忆该长期留」「不用我提醒就自动调用记忆库」时使用。人格层含主人档案、关系定位与身份识别（暗号 hint+哈希、三级权限）；规范规则 rules.md 含 R11 自动触发（保存信号 T1–T11 / 读取信号 U1–U8）、R12 留存分级（永久/长期/中期/会话态）、R13 常驻锚点（让 AI 永远记得自己有记忆库）、R14 目录分层（深层存近期与重要、浅层存久远日常，省 token）。人格、经验、事实分三层，记忆目录再分深浅两层，目录优先于向量检索，全部 Markdown 可 git 版本化。
+description: Agent 记忆系统技能。当用户要求「记住这件事」「回忆/查记忆」「养 agent 人格」「配置记忆系统」「初始化记忆目录」「写记忆」「防失忆」「给 agent 加长期记忆」「记住我是谁/怎么认出我」「给 agent 定规矩」「让 AI 自动保存/自动读取记忆」「什么时候该记下来」「哪些记忆该长期留」「不用我提醒就自动调用记忆库」时使用。人格层含主人档案、关系定位与身份识别（暗号 hint+哈希、三级权限）；规范规则 rules.md 含 R11 自动触发（保存信号 T1–T11 / 读取信号 U1–U8）、R12 留存分级（永久/长期/中期/会话态）、R13 常驻锚点（让 AI 永远记得自己有记忆库）、R14 目录分层（深层存近期与重要、浅层存久远日常，省 token）；R15 人格设定保护（安装绝不覆盖用户既有设定，脚本层已硬保护，`main/` 两文件 `--force` 也不覆盖）。人格、经验、事实分三层，记忆目录再分深浅两层，目录优先于向量检索，全部 Markdown 可 git 版本化。
 ---
 
-# agent-memory-skill・Agent 记忆系统技能 v1.3
+# agent-memory-skill・Agent 记忆系统技能 v1.3.4
 
 > 📌 元数据
 > 摘要：主记忆／经验／事实三层分离、目录优先检索的 agent 长期记忆系统；主记忆层含主人档案、关系定位与身份识别，边界限制升格为十类规范规则
@@ -90,7 +90,12 @@ description: Agent 记忆系统技能。当用户要求「记住这件事」「�
 python3 scripts/memory_init.py --root "D:/memory" --agent-name "小幕" --owner "M"
 # v1.0 老库升级（boundaries.md → rules.md 附录）：
 python3 scripts/memory_init.py --root "D:/memory" --migrate
+
+# 🔒 R15：persona.md / rules.md 不可重建，--force 也不会覆盖
+#    （确需重建用 --force-main，脚本会先备份为 .bak-<时间戳>）
 ```
+
+升级 / 重跑初始化时不必担心人格被冲掉：**`main/` 下这两个不可重建文件已被硬保护**（即使加了 `--force`）。
 
 ---
 
@@ -115,10 +120,10 @@ python3 scripts/memory_init.py --root "D:/memory" --migrate
 | T7 | 学到新知识 | "原来 X 是 Y" | 知识库 or `facts/knowledge/` |
 | T8 | 人物 / 关系 / 实体 | "我同事""XX 项目" | persona（确认）/ `involves` |
 | T9 | 显式"记住" | "记住这件事" | 立即写入 |
-| T10 | 会话收尾 | "先这样""今天到这" | **盘点补漏** |
+| T10 | 会话收尾 | "先这样""今天到这" | **收尾三动作**：盘点补漏 + 反思得失 + 一句话交接 → `facts/events/`（不需确认） |
 | T11 | 踩坑 / 失败 | 方案行不通 | 事件 + "不要这样做" |
 
-**T10 收尾盘点是防漏记的最后一道闸**：长会话结束前主动回顾"这轮主人透露了什么偏好、做了什么决定、纠正了我什么"，补写进去。
+**T10 收尾三动作（盘点 / 反思 / 交接）是防漏记、防断片的最后一道闸**：长会话结束前主动回顾"这轮主人透露了什么偏好、做了什么决定、纠正了我什么"（盘点），再反思哪些记忆用上了 / 该记没记 / 已被推翻（反思），最后给下次会话留一句承接语（交接）。详见 `auto-trigger.md` 专节。
 
 ### 2.2 读取触发 U1–U8（出现即自动查，不等指令）
 
@@ -145,7 +150,7 @@ python3 scripts/memory_init.py --root "D:/memory" --migrate
  ├─ ② 扫读取触发 U1–U8 → 命中即检索（L0→L1→L2）
  ├─ ③ 正常回应 / 完成任务
  ├─ ④ 扫保存触发 T1–T11 → 命中即写入 + 更新 index/links + check
- └─ ⑤ 会话收尾：T10 盘点补漏
+ └─ ⑤ 会话收尾：T10 收尾三动作（盘点 / 反思 / 交接）
 ```
 
 自动保存只对 **✅ 确认的主人**开放。存疑 / 非本人 / 接口进来的请求**不自动写**（防污染，R11.7）。
@@ -212,10 +217,17 @@ python3 scripts/memory_tier.py --root <root> --stats             # token 估算
 python3 scripts/memory_tier.py --root <root> --pin <slug>        # 🔒 锁定在深层，永不下沉
 python3 scripts/memory_tier.py --root <root> --promote <slug>    # ⭐ 标重要 → 拉回深层
 python3 scripts/memory_tier.py --root <root> --demote <slug>     # 标日常 → 立即下沉
+python3 scripts/memory_tier.py --root <root> --heat              # 🔥 按访问次数排，看谁常用
+python3 scripts/memory_tier.py --root <root> --bump <slug>       # 读完一个事件后自增其热度
 python3 scripts/memory_index.py --root <root> --rebuild          # ★ 改完必须重建才生效
 ```
 
 `--plan` 会标注每条留深层的原因（🔒 锁定 / ⭐ 重要 / 🕐 近期还剩几天），并预告 14 天内即将下沉的条目。
+
+> ⚠️ `--bump` 会改事件的 frontmatter（**读取产生了写入**）。建议按周期批量 bump 后一次 `git commit`，别让 git 历史被"读过几次"刷满。
+> `access_count` 写法要干净（`access_count: 3`），带行尾注释或中文也能容错读取，但会提示。
+
+**标签速览**：深层事件 ≥30 条时，`--rebuild` 会在 `index.md` 自动追加一个按主标签分组的速览块，扫目录更快（<30 条自动移除，幂等；详见 `index-tiering.md`）。
 
 ### 3.3 在检索漏斗里的位置
 
@@ -275,8 +287,8 @@ L2   向量  → 两层都无 → 才动向量检索
  │    → main/rules.md 对应 R 编号（改前确认；改本文件需二次确认）
  ├─ 是一个「发生了的事件」？
  │    → facts/events/YYYYMMDD-<slug>.md 写详情
- │      + main/index.md 追加一行摘要（★必做，否则目录失效）
- │      + facts/links.md 补关联（★必做，否则成孤岛）
+ │      + main/index.md 追加一行摘要（★必做，否则目录失效，这条记忆以后检索不到）
+ │      + facts/links.md 补关联（加分项，能判明因果时补；判不出可留白，孤岛非缺陷）
  ├─ 是从经历/学习中总结出的「可复用做法」？
  │    → experience/methodology/<name>.md（写成 SOP，能被直接照做）
  ├─ 是「反复被问到的问题」且重要实用？
@@ -287,11 +299,21 @@ L2   向量  → 两层都无 → 才动向量检索
       └─ 未绑定知识库     → facts/knowledge/<name>.md
 ```
 
+#### 写入前三判（防重复，R5.9）
+
+落到哪层之后、正式写文件之前，先过三判，避免库里长出重复 / 碎片记忆（借鉴 mem0 的 ADD/UPDATE/NOOP 思路，但**本系统永不删除**，矛盾走 `led_to`）：
+
+1. **判重（NOOP）**：要写的内容与某条已有条目**实质相同** → 不新建，只在原条目补一条关联 / 指针即可。
+2. **判补（合并）**：是已有条目的**补充或新进展**（同一件事，且未被推翻） → 在原条目上追加，不新建（避免碎片）。
+3. **判矛（矛盾 → led_to）**：与已有条目**矛盾**，且旧条目已被推翻 / 过时 → 写新条目，并用 `led_to` 指向旧条目（沿用 R10.3 不删旧）。
+
+三判都过不了"已有"的，才允许新建。这条把"不写重复"（R5）从清单变成了**可执行的前置步骤**。
+
 **每类写入的强制产出物**：
 
 | 写什么 | 强制产出物 | 没有产出物 = 没做 |
 |---|---|---|
-| 事件 | `facts/events/` 新文件 + `index.md` 新增一行 + `links.md` 至少一条关联 | 不许只写详情不进目录 |
+| 事件 | `facts/events/` 新文件 + `index.md` 新增一行（`links.md` 关联为加分项，非强制） | 不许只写详情不进目录 |
 | 方法论 | `experience/methodology/` 文件，含「触发场景 / 步骤 / 验收标准」三要素 | 缺验收标准不算方法论 |
 | 问答模板 | `experience/qa-templates/` 文件，含「问题模式 / 答案模板 / 适用边界」 | 缺适用边界不许入库 |
 | 人格/主人/关系/识别 | `persona.md` 对应段更新 + **向用户复述改动并获确认**（明文口令违规） | 未经确认不许改 |
@@ -329,7 +351,7 @@ L2   向量  → 两层都无 → 才动向量检索
 
 ## 七、事件串联（`facts/links.md`）
 
-每个事件不是孤岛。`links.md` 维护一张关系表，关系类型固定六种：
+**每个事件不必是孤岛**（但孤立也没有错）。`links.md` 维护一张关系表，关系类型固定六种：
 
 | 关系 | 含义 | 例子 |
 |---|---|---|
@@ -349,7 +371,8 @@ L2   向量  → 两层都无 → 才动向量检索
 | 20261028-客户投诉 | caused_by | 20261026-项目延期 | 同上（反向行必须存在） |
 ```
 
-校验：`python3 scripts/memory_check.py --root <root>` 会报出单向边和孤岛事件。
+校验：`python3 scripts/memory_check.py --root <root>` 会报出**单向边**与**断链**（这两项是硬指标）。
+**孤岛事件不报错、也不是缺陷**——探索期的新事件天然没有关联，记下来就够了；绝不为消灭孤岛硬凑 `related`（R7.1 / R7.2）。
 
 ---
 
@@ -402,7 +425,7 @@ L2   向量  → 两层都无 → 才动向量检索
 
 ## 输出契约
 
-**必问清单**（一次问完，≤7 问）：
+**必问清单**（一次问完，≤8 问）：
 ① 记忆根目录放哪 ② agent 叫什么/什么人格 ③ **主人怎么称呼（代号，不写真名）** ④ **你们是什么关系、相处基调** ⑤ **识别暗号（只收 hint + 哈希，不存明文）** ⑥ 是否已绑定外部知识库（决定知识写哪） ⑦ 是否现在初始化并 git 化 ⑧ **常驻锚点注入到哪个文件**（`AGENTS.md` / `CLAUDE.md` / 工作区 `MEMORY.md`——选你这个 agent 每次会话会自动加载的那个；漏了这步 AI 会失忆）
 （向量检索开关可默认先关，小库用 grep 兜底）
 
@@ -436,22 +459,22 @@ L2   向量  → 两层都无 → 才动向量检索
 | `references/linking-spec.md` | 串联关系类型、links.md 规范、成网判据 | 写事件后补关联时 |
 | `references/integration-mcp.md` | MCP 工具声明、外部平台对接、接口清单 | 要对外暴露记忆能力时 |
 | `references/anti-loss.md` | 备份策略、重建演练、git 化、隐私红线细则 | 搭建完成后 / 定期体检 |
-| `scripts/memory_init.py` | 初始化目录骨架（含 `--owner` / `--migrate`） | 首次使用 / v1.0 升级 |
-| `scripts/memory_index.py` | 目录索引维护与重建 | 写事件后 / 定期 |
-| `scripts/memory_check.py` | 结构校验：断链、孤岛、index 一致、**W6 锚点** | 每次写入后 |
+| `scripts/memory_init.py` | 初始化目录骨架（含 `--owner` / `--migrate`；`main/` 两文件 R15 硬保护） | 首次使用 / v1.0 升级 |
+| `scripts/memory_index.py` | 目录索引维护与重建（双层 + 标签速览） | 写事件后 / 定期 |
+| `scripts/memory_check.py` | 结构校验：**单向边 / 断链 / 漏登记**、index 一致、**W6 锚点**、**W8 字段漂移 / W9 摘要重复 / W10 失效窗异常**（孤岛仅提示，不算问题） | 每次写入后 |
 | `scripts/memory_anchor.py` | **常驻锚点**：生成 / 注入 / 校验 / 移除（幂等） | 初始化后必做 / 换环境 / 定期体检 |
-| `scripts/memory_tier.py` | 目录分层管理：plan / stats / pin / promote / demote | 整理目录 / 深层过长（W7）时 |
+| `scripts/memory_tier.py` | 目录分层管理：plan / stats / pin / promote / demote / **heat（热度排序）/ bump（读后自增，建议批量后一次提交）** | 整理目录 / 深层过长（W7）时 / 读完事件后 |
 | `assets/templates/` | 五类文件模板（persona / rules / event / methodology / qa） | 写任何记忆文件时 |
 
 ## 🔗 知识关系（2026-10-26 建立）
 
 **关联**（我指向谁）：
 
-- 使用：[kb-setup-skill・飞书知识库搭建技能 v6.0](../20261020_kb-setup-skill・飞书知识库搭建技能 v6.0.md)（元数据五要素、标签规范、文末关系段均沿用其规范）
-- 使用：[标签库（受控标签 · 两族五维）](../../02-标签库/标签库.md)（打标与功能标签新增登记规范）
-- 联想：[20261020_kb-health-check-skill・知识库健康巡检与修复技能 v2.1](../20261020_kb-health-check-skill・知识库健康巡检与修复技能 v2.1.md)（孤岛/断链检查思路同源）
-- 联想：[20261020_向量数据库选型笔记](../../07-百科知识库/20261020_向量数据库选型笔记.md)（L2 向量检索落地时的选型依据）
-- 被联想：[skill-factory-skill・技能工厂 v1.2](https://ima.qq.com/wiki/)（本技能按其七步流产出）
+- 使用：**kb-setup-skill**（外部知识库搭建技能）——元数据五要素、标签规范、文末关系段均沿用其规范
+- 使用：**标签库**（受控标签 · 两族五维）——打标与功能标签新增登记规范
+- 联想：**知识库健康巡检技能**——孤岛 / 断链检查思路同源
+- 联想：**向量数据库选型笔记**——L2 向量检索落地时的选型依据
+- 被联想：**skill-factory-skill**（技能工厂）——本技能按其产出流程设计
 
 **反向（谁指向我）**：
 
@@ -464,3 +487,5 @@ L2   向量  → 两层都无 → 才动向量检索
 - 2026-10-26：**v1.2 升级（用户明确需求：让 AI 自动存取记忆、并长期记住自己有记忆库）**。① `rules.md` 由 R1–R10 扩到 **R1–R13**：R11 自动触发（保存 T1–T11 / 读取 U1–U8 / 每轮判定流程 / 只对确认主人开放）、R12 留存分级（永久·长期·中期·会话态 + 四问判据 + 必写不写清单 + 降级归档）、R13 常驻锚点（注入 / 校验 / 换环境重注 / 不写库内容）。② 新增 `references/auto-trigger.md`、`references/retention-spec.md`。③ 新增 `assets/templates/memory-anchor.md` 与 `scripts/memory_anchor.py`（`--inject` / `--check` / `--check-all` / `--remove` / `--print`，幂等且不破坏目标文件原内容）。④ `memory_init.py` 加 `--anchor-target`（可多次）与 `auto_trigger` / `session_wrapup_scan` 配置；`memory_check.py` 加 **W6 锚点校验**、R 编号检查扩到 R13。⑤ 冒烟：init（含锚点注入）→ 2 事件（含 `retention` 字段）→ rebuild → check = 0 error / 0 warning；负例（锚点被覆盖丢失）正确报 W6、重新注入即恢复；重复注入不叠加（START 标记恒为 1）。
 
 - 2026-10-26：**v1.3 升级（用户明确需求：给常驻上下文瘦身）**。① 记忆目录拆为深浅两层：**深层** `main/index.md`（近期 + 重要，常驻必读）、**浅层** `main/index-shallow.md`（久远 + 日常，按需读）；新事件**默认进深层**，久远（超 `deep_window_days`，默认 90 天）且不重要的在 rebuild 时自动下沉；★**事件文件不移动，只迁移目录行**，故 `links.md` 关联完全不受影响。② 新增 **R14 目录分层规范**（7 条）、`references/index-tiering.md`、`scripts/memory_tier.py`（plan / stats / pin / unpin / promote / demote）；事件模板新增 `importance` 与 `pinned` 字段。③ 检索漏斗由三级扩为**四级**：L0 常驻 → L1 深层 → L1.5 浅层 → L2 向量。④ 脚本：`memory_index.py` 支持双层 rebuild 与 `--stats`；`memory_check.py` 的 E4 改为跨两层统计，新增 **E6 重复登记**、**W7 深层过长**；`memory_init.py` 生成 `index-shallow.md` 与 `deep_window_days` 配置。⑤ 技能由 `three-layer-memory` 更名为 **`agent-memory-skill`**（中文名：Agent 记忆系统技能）。⑥ 冒烟：3 事件（近期 / 久远普通 / 久远重要）→ rebuild 自动分层为深层 2 + 浅层 1；`--demote` 下沉、`--promote` 拉回均生效；check = 0 error。
+- 2026-10-27：**v1.3.3 升级（对标 GitHub 同类项目拆解后的定向吸收；原则＝只优化原有功能、不新增功能、只吸收有用的、不硬凑）**。① **写入前三判 R5.9**（借鉴 mem0 ADD/UPDATE/NOOP，但本系统永不删除）：正式写文件前先判「重（NOOP）／补（合并）／矛（矛盾→`led_to`）」，把"不写重复"从清单变成可执行前置步骤；同步进 `rules-spec.md` 与 `assets/templates/rules.md`。② **失效窗 `invalidated_by`**（借鉴 Zep 双时间轴）：被推翻的旧事件加显式失效标记，让"演变"可见可判定；配 `led_to` 双向表达；`memory_check.py` 新增 **W10** 校验其指向与时间逻辑；文档见 `retention-spec.md`「六之二」。③ **热度分层**（借鉴 MemoryOS 热度分）：事件加 `access_count` / `last_access`，`memory_tier.py` 新增 `--heat`（按访问排序）与 `--bump`（读后自增），让常用旧事可凭热度 `--promote` 回深层；★仅作建议不自动改层。④ **T10 收尾三动作**（借鉴 robabby reflect/pickup）：收尾由"盘点补漏"扩为 **盘点 / 反思 / 交接**，防漏记也防断片；见 `auto-trigger.md` 专节。⑤ **深层标签速览**（借鉴 MemoryOS 分段）：`memory_index.py --rebuild` 在深层 ≥30 条时自动追加按主标签分组的 `AUTO:tags` 块（<30 自动移除），加速扫描。⑥ **schema 漂移检查**：`memory_check.py` 新增 **W8**（缺 `retention`/`importance`）、**W9**（摘要重复）、**W10**（失效窗异常），均 warning 不阻断。⑦ **MCP 工具标注**：`integration-mcp.md` 工具表加「副作用 / 幂等」列，接入方据此判断风险。⑧ **锚点补 L0 必读清单 + token 预算**（借鉴 Letta 字符预算）：`memory-anchor.md` 明确三件套常驻约 1–2K token，并顺手修正锚点里陈旧的 `R1–R13` → `R1–R15`。⑨ **git 提交钩子**：`anti-loss.md` 新增 `.git/hooks/pre-commit` 自动跑 `memory_check.py`，有 error 即阻断提交。⑩ 未吸收项（明确排除）：F5 检索、F7 串联、F12 经验层、写入回执——均为用户判定"不改"，保持现有设计。
+- 2026-10-27：**v1.3.4 升级（全库通读后的纠错与做实；原则＝修缺陷、不加功能、不改结构、不硬凑）**。① **🔴 修 `--force` 抹掉人格（P0 安全缺陷）**：`memory_init.py` 原先 `os.path.exists and not force` 会让 `--force` 把 `persona.md` / `rules.md` 覆盖成空模板——而 R15.5 白纸黑字写着"绝不覆盖"，**代码与承诺相反**。现新增 `PROTECTED` 硬保护：这两个文件任何情况下都不被 `--force` 覆盖；确需重建须显式 `--force-main`，且脚本**先自动备份**为 `.bak-<时间戳>`（可回滚）。② **统一「孤岛」口径（5 处残留）**：`layer-spec.md`「必须关联否则校验会报」、`SKILL.md` 写入树「★必做否则成孤岛」、「会报出孤岛事件」、`retention-spec.md` 归档检查、`README` 体检描述——全部与 R7.1 打架，会让 AI 为消灭孤岛硬凑 `related`（恰是 R7.2 禁止的）。现全库统一：关联是加分项、孤岛非缺陷、`index.md` 加行才是必做。③ **修 T10 表格错位**：SKILL.md 保存触发表表头 4 列而 T10 行 6 列，整表渲染错位（v1.3.3 升级时引入），已改回 4 列；并全表扫描确认 0 处错位。④ **E4 改集合比对（P1）**：原 E4 只比行数，实测「某事件漏登记 + 另一事件重复登记」时行数互补、check 仍判"一致"——这条记忆从此检索不到却无人知晓，而 R5.4 说"不进目录 = 没写"。现比对文件名集合，分别报「漏登记」「登记了不存在的事件」「重复登记」。⑤ **E3 覆盖目录「关联方法」列**：原 E3 只扫 `links.md` 边与事件内关联段，目录 method 列链接（方法论改名后）静默失效无人查，现计入断链。⑥ **`--heat` / `--bump` 容错（P1）**：`access_count: 3  # 注释` 会让命令 `ValueError` 直接崩，现取前导数字、失败按 0 并提示；同时文档明确 `--bump` 会改事件文件，建议批量后一次提交，避免 git 被"读"刷满。⑦ **文案对齐**：`R1–R14`→`R1–R15`（4 处）、三级漏斗→四级、`盘点补漏`→收尾三动作（5 处）、`≤7 问`→`≤8 问`（实列 8 项）、README 标题与文件清单同步。⑧ **event 模板补 `led_to` 字段位**：`retention-spec` 六之二要求新事件用 frontmatter `led_to` 表达推翻关系，但模板没给位置，现与 `invalidated_by` 成对补上。⑨ 冒烟：`--force` 后自定义人格与自定义规则均完好（count 1）；`--force-main` 备份文件可找回原内容；负例（漏登记 / 指向已删文件 / 方法列断链）三条全部被拦下；脏 `access_count`（行尾注释 / 中文 / 空）四种写法 `--heat`/`--bump` 均正常退出且提示到位。

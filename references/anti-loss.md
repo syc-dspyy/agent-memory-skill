@@ -46,6 +46,31 @@ git commit -m "init memory"
 
 ---
 
+## git 提交钩子：写入前自动校验（v1.3.3 优化）
+
+手动 `git commit` 容易忘跑 `memory_check.py`。用 **pre-commit 钩子**把校验绑到提交动作上：有 error 直接拦截提交，强制先修再提交。
+
+在记忆根目录建 `.git/hooks/pre-commit`（建完 `chmod +x`）：
+
+```bash
+#!/bin/sh
+# 记忆库提交前校验：有 error 则阻断提交，强制先修
+root="$(git rev-parse --show-toplevel)"
+python3 "$root/scripts/memory_check.py" --root "$root" >&2
+if [ $? -ne 0 ]; then
+  echo "✗ memory_check 有 error，提交已阻断。先修复再 commit。" >&2
+  exit 1
+fi
+```
+
+要点：
+
+- 钩子**只拦 error，不拦 warning**（W6 / W7 等提示不阻断日常提交）——校验脚本的退出码正是按此设计。
+- 脚本路径用 `git rev-parse --show-toplevel` 定位，钩子放记忆库任意子目录都能跑。
+- 临时要跳过（如紧急 fix）可用 `git commit --no-verify`，但事后务必补跑 `memory_check.py`。
+
+---
+
 ## 重建演练（每季度一次）
 
 ```bash

@@ -8,7 +8,8 @@
     E1 孤岛事件   —— facts/events/ 中没有任何关联的事件（v1.x 起**不再判为 error**，降级为提示；孤立事件只要存在即可，不算缺陷）
     E2 单向边     —— links.md 中 A→B 写了但 B→A 没写
     E3 断链       —— 关联指向的文件不存在
-    E4 index 一致 —— 深层 + 浅层 目录行数 == events 文件数（v1.3 双层）
+    E4 index 一致 —— 深层 + 浅层 目录登记与实际事件文件一一对应（v1.3 双层；★比对文件名集合，
+                    不只比行数——漏登记 / 指向已删文件 / 重复登记三种情形都能查出）
     E5 缺字段     —— 事件文件缺 date / summary / emotion
     E6 重复登记   —— 同一事件同时出现在深层和浅层目录（v1.3）
     M1 缺主记忆文件 —— main/ 缺 persona.md / rules.md / index.md
@@ -16,10 +17,13 @@
     W1 知识错写   —— 已绑定外部知识库，facts/knowledge/ 却有文件
     W2 隐私扫描   —— 正文命中手机号 / 邮箱 / 身份证号
     W3 明文口令   —— persona.md 疑似写了明文暗号（应存 hint + sha256）
-    W4 规则缺失   —— rules.md 缺少某个 R 编号（R1–R13）
+    W4 规则缺失   —— rules.md 缺少某个 R 编号（R1–R15）
     W5 旧文件遗留 —— 存在 v1.0 的 main/boundaries.md 未迁移
     W6 锚点失效   —— 未注入常驻锚点，或目标文件里的锚点丢失（R13）
     W7 深层过长   —— 深层目录条数超过阈值，常驻 token 压力大（v1.3 R14）
+    W8 字段漂移   —— 事件缺 v1.3 起要求的 retention / importance 字段
+    W9 摘要重复   —— 两条及以上事件 summary 完全相同（疑似重复记忆）
+    W10 失效窗异常 —— invalidated_by 指向不存在或时间逻辑错的事件
 
 退出码: 0 = 通过（可能有 warning）；1 = 有 error
 """
@@ -29,10 +33,10 @@ import re
 import sys
 
 try:
-    from memory_index import collect_events, parse_frontmatter
+    from memory_index import collect_events, parse_frontmatter, parse_date
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from memory_index import collect_events, parse_frontmatter
+    from memory_index import collect_events, parse_frontmatter, parse_date
 
 
 def to_slug(name):
@@ -260,6 +264,10 @@ def check(root):
     slug_map = {it["slug"]: it["file"] for it in items}
     slugs = set(slug_map)
 
+    # 两层目录路径（E3 拉链路检查与 E4 都要用，先算好）
+    idx_path = os.path.join(root, "main", "index.md")
+    shal_path = os.path.join(root, "main", "index-shallow.md")
+
     edges = read_links(root)
     ev_links = parse_event_links(root)
 
@@ -303,23 +311,53 @@ def check(root):
         p = os.path.normpath(os.path.join(events_dir, target))
         if not os.path.exists(p):
             broken.append(f"{src} → {target}")
+    # E3 补：目录「关联方法」列 —— method 指向 experience/ 下的文件，改名/挪走后会静默失效
+    # （目录是 L1 唯一入口，这里的死链最容易被忽略）
+    for idx_file in (idx_path, shal_path):
+        if not os.path.exists(idx_file):
+            continue
+        try:
+            txt = open(idx_file, "r", encoding="utf-8").read()
+        except OSError:
+            continue
+        base = os.path.dirname(os.path.abspath(idx_file))  # main/
+        for _label, target in re.findall(r"\[([^\]]*)\]\((\.\./[^)\s]+)\)", txt):
+            if "/facts/events/" in target:  # 事件链接由上面漏登记/错位检查负责
+                continue
+            p = os.path.normpath(os.path.join(base, target))
+            if not os.path.exists(p):
+                broken.append(f"{os.path.basename(idx_file)} 关联方法 → {target}")
     if broken:
         errors.append(f"E3 断链节点 {len(set(broken))} 个：{', '.join(sorted(set(broken))[:5])}")
 
     # E4 index 一致（v1.3：深层 + 浅层两层合计）
-    idx_path = os.path.join(root, "main", "index.md")
-    shal_path = os.path.join(root, "main", "index-shallow.md")
     if os.path.exists(idx_path):
         deep_rows = _index_rows(idx_path)
         shallow_rows = _index_rows(shal_path)
         total = deep_rows + shallow_rows
-        if total != len(event_files):
+        registered = _index_files(idx_path) | _index_files(shal_path)
+        actual = set(event_files)
+        missing = sorted(actual - registered)  # 写了文件却没进目录 → 以后检索不到
+        ghost = sorted(registered - actual)    # 目录有行但文件没了 → 点了进去是死的
+        if missing:
             errors.append(
-                f"E4 index 不一致：深层 {deep_rows} + 浅层 {shallow_rows} = {total} 行 "
-                f"vs events/ {len(event_files)} 个文件（跑 memory_index.py --rebuild）"
+                f"E4 漏登记 {len(missing)} 个事件没进任何一层目录：{', '.join(missing[:5])}"
+                f"（不进目录 = 以后检索不到，等于没写；跑 memory_index.py --rebuild）"
             )
-        else:
-            info.append(f"E4 index 一致（深层 {deep_rows} + 浅层 {shallow_rows}）")
+        if ghost:
+            errors.append(
+                f"E4 目录登记了 {len(ghost)} 个不存在的事件文件：{', '.join(ghost[:5])}"
+                f"（文件已删 / 已改名，跑 memory_index.py --rebuild 清掉）"
+            )
+        if not missing and not ghost:
+            info.append(
+                f"E4 index 一致（深层 {deep_rows} + 浅层 {shallow_rows}，登记与实际一一对应）"
+            )
+            if total != len(event_files):
+                errors.append(
+                    f"E4 行数不符：目录 {total} 行 vs events/ {len(event_files)} 个文件"
+                    f"（文件名都对得上，说明同一事件被重复登记了；跑 --rebuild 去重）"
+                )
         # E6 重复登记（同一事件不能同时在两层）
         dup = _index_files(idx_path) & _index_files(shal_path)
         if dup:
@@ -335,6 +373,52 @@ def check(root):
             )
     else:
         errors.append("E4 找不到 main/index.md")
+
+    # W8 字段漂移：v1.3 起事件应有 retention / importance 字段（缺则分层判据失效）
+    drift = []
+    for it in items:
+        miss = [k for k in ("retention", "importance") if not it.get(k)]
+        if miss:
+            drift.append(f"{it['file']}(缺 {', '.join(miss)})")
+    if drift:
+        warnings.append(
+            f"W8 字段漂移 {len(drift)} 个事件缺 retention/importance 字段："
+            f"{', '.join(drift[:5])}（补上以启用分层与留存分级）"
+        )
+
+    # W9 摘要重复：两条及以上事件 summary 完全相同 → 疑似重复记忆
+    by_summary = {}
+    for it in items:
+        s = (it.get("summary") or "").strip()
+        if s and s != "（缺 summary）":
+            by_summary.setdefault(s, []).append(it["slug"])
+    dups = {s: v for s, v in by_summary.items() if len(v) > 1}
+    if dups:
+        warnings.append(
+            "W9 摘要重复 "
+            + "；".join(f"「{s[:14]}…」{v}" for s, v in list(dups.items())[:3])
+            + "（疑似重复记忆，按 R5.9 写入前三判处理）"
+        )
+
+    # W10 失效窗异常：invalidated_by 指向不存在 / 时间逻辑错的事件
+    invalid = []
+    for it in items:
+        ib = (it.get("invalidated_by") or "").strip()
+        if not ib:
+            continue
+        if ib not in slugs:
+            invalid.append(f"{it['slug']}→{ib}(不存在)")
+            continue
+        d_self = parse_date(it.get("date", ""))
+        tgt_item = next((x for x in items if x["slug"] == ib), None)
+        d_target = parse_date(tgt_item.get("date", "")) if tgt_item else None
+        if d_self and d_target and d_target < d_self:
+            invalid.append(f"{it['slug']}→{ib}(推翻事件比被推翻的还早)")
+    if invalid:
+        warnings.append(
+            f"W10 失效窗异常 {len(invalid)} 处：{', '.join(invalid[:5])}"
+            f"（invalidated_by 应指向更新的、确实推翻了本事件的条目）"
+        )
 
     # W1 知识错写
     cfg = os.path.join(root, ".memory-config.yaml")
