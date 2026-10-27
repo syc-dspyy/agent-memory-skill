@@ -5,7 +5,7 @@
     python3 memory_check.py --root <root>
 
 检查项:
-    E1 孤岛事件   —— facts/events/ 中没有任何关联的事件
+    E1 孤岛事件   —— facts/events/ 中没有任何关联的事件（v1.x 起**不再判为 error**，降级为提示；孤立事件只要存在即可，不算缺陷）
     E2 单向边     —— links.md 中 A→B 写了但 B→A 没写
     E3 断链       —— 关联指向的文件不存在
     E4 index 一致 —— 深层 + 浅层 目录行数 == events 文件数（v1.3 双层）
@@ -49,7 +49,7 @@ PII_PATTERNS = {
 
 MAIN_REQUIRED = ["persona.md", "rules.md", "index.md"]
 PERSONA_SECTIONS = ["关于我的主人", "我们之间的关系", "身份识别"]
-RULE_IDS = [f"R{i}" for i in range(1, 15)]  # v1.3：R1–R14
+RULE_IDS = [f"R{i}" for i in range(1, 16)]  # v1.x：R1–R15
 DEEP_MAX_ROWS = 60  # 深层目录建议上限（超过则 W7，常驻 token 压力）
 # 疑似明文口令：「暗号/口令/token: xxx」且 xxx 不是哈希、也不是占位提示
 PLAIN_TOKEN = re.compile(r"(?:暗号|口令|token|Token)\s*[:：]\s*([^\s`|（）(]+)")
@@ -263,7 +263,8 @@ def check(root):
     edges = read_links(root)
     ev_links = parse_event_links(root)
 
-    # E1 孤岛
+    # E1 孤岛（降级为提示，不再判 error）：孤立事件只要躺在记忆目录里即可，不算缺陷。
+    # 尝试新事件产生孤岛是正常探索，不应因此否定新事件（见 linking-spec.md / rules.md R7.1）。
     linked = set()
     for src, _rel, dst in edges:
         for node in (src, dst):
@@ -274,7 +275,10 @@ def check(root):
         linked.add(to_slug(os.path.basename(target)))
     orphans = sorted(s for s in slugs if s not in linked)
     if orphans:
-        errors.append(f"E1 孤岛事件 {len(orphans)} 个：{', '.join(orphans)}")
+        info.append(
+            f"E1 孤岛事件 {len(orphans)} 个（允许，非缺陷）：{', '.join(orphans)} "
+            f"——孤立事件合法，探索性新事件无需强求关联"
+        )
 
     # E2 单向边（按解析后的 slug 比较，兼容「日期-slug」写法）
     resolved = [(resolve_node(s, slugs) or s, r, resolve_node(d, slugs) or d) for s, r, d in edges]

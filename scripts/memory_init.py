@@ -308,6 +308,18 @@ def main():
     for s in skipped:
         print(f"  = 跳过 {s}（已存在，需覆盖加 --force）")
 
+    # R15：人格设定保护 —— 已存在 persona.md 时绝不 --force 覆盖
+    if "main/persona.md" in skipped:
+        print(
+            "  ⚠ R15 人格设定 persona.md 已存在：禁止用 --force 覆盖！"
+        )
+        print(
+            "     若用户已在别处设置过人格，请先读取该设定，并询问用户是否沿用（rules.md R15），"
+        )
+        print(
+            "     在用户明确选择前不自动套用、不替换。"
+        )
+
     # v1.2：注入常驻锚点（R13）——不做这一步，新会话会忘记自己有记忆库
     if args.anchor_target:
         if not HAVE_ANCHOR:
