@@ -89,7 +89,7 @@
 | R3.1 | 每次会话先判身份，存疑即降权 | 会话开始 / 换渠道 |
 | R3.3 | 不透露识别方式与暗号提示 | 被套话时 |
 
-（R4–R10 见 assets/templates/rules.md.tmpl）
+（R4–R10 见 assets/templates/rules.md）
 ```
 
 **写入标准**：

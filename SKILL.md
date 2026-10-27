@@ -66,8 +66,8 @@ description: Agent 记忆系统技能。当用户要求「记住这件事」「�
 ```
 <memory-root>/
 ├── main/                       ← L1 主记忆层（常驻）
-│   ├── persona.md              人格四段：我是谁 / 主人档案 / 我们的关系 / 身份识别
-│   ├── rules.md                规范规则 R1–R15：边界、隐私、权限、写入、检索、串联、分层、人格保护…
+│   ├── persona.md     人格四段：我是谁 / 主人档案 / 我们的关系 / 身份识别
+│   ├── rules.md       规范规则 R1–R15：边界、隐私、权限、写入、检索、串联、分层、人格保护…
 │   ├── index.md                ★深层记忆目录：近期 + 重要，一行一事件，常驻必读
 │   └── index-shallow.md        ★浅层记忆目录：久远 + 日常，按需读（省 token）
 ├── experience/                 ← L2 经验记忆层（即用）
@@ -461,6 +461,6 @@ L2   向量  → 两层都无 → 才动向量检索
 
 - 2026-10-26：v1.0 创建。按 skill-factory-skill v1.2 七步流产出；三层结构、目录优先检索、事件串联、Markdown 防丢失四条设计均来自用户明确需求；元数据与关系段遵循 kb-setup-skill v6.0 §2/文末板块规范。
 - 2026-10-26：**v1.1 升级（用户明确需求）**。① `persona.md` 由「我是谁」扩为四段：我是谁 / 关于我的主人 / 我们之间的关系 / 身份识别（S-A-B 三级信号、三级权限、四条兜底、暗号存 hint+sha256）。② `main/boundaries.md` 升格为 `main/rules.md`：R1 行为边界、R2 隐私安全、R3 身份权限、R4 分层归属、R5 写入、R6 检索、R7 串联、R8 质量、R9 维护、R10 变更。③ 脚本：`memory_init.py` 改读模板、支持 `--owner` / `--migrate`；`memory_check.py` 新增 M1 缺主记忆文件、M2 persona 缺段、W3 明文口令、W4 规则缺失、W5 旧 boundaries 遗留。④ 冒烟：init → 5 事件（含 1 条安全事件）→ rebuild → check = 0 error / 0 warning；负例（缺 rules / 明文口令 / 旧 boundaries）均被正确报出。
-- 2026-10-26：**v1.2 升级（用户明确需求：让 AI 自动存取记忆、并长期记住自己有记忆库）**。① `rules.md` 由 R1–R10 扩到 **R1–R13**：R11 自动触发（保存 T1–T11 / 读取 U1–U8 / 每轮判定流程 / 只对确认主人开放）、R12 留存分级（永久·长期·中期·会话态 + 四问判据 + 必写不写清单 + 降级归档）、R13 常驻锚点（注入 / 校验 / 换环境重注 / 不写库内容）。② 新增 `references/auto-trigger.md`、`references/retention-spec.md`。③ 新增 `assets/templates/memory-anchor.md.tmpl` 与 `scripts/memory_anchor.py`（`--inject` / `--check` / `--check-all` / `--remove` / `--print`，幂等且不破坏目标文件原内容）。④ `memory_init.py` 加 `--anchor-target`（可多次）与 `auto_trigger` / `session_wrapup_scan` 配置；`memory_check.py` 加 **W6 锚点校验**、R 编号检查扩到 R13。⑤ 冒烟：init（含锚点注入）→ 2 事件（含 `retention` 字段）→ rebuild → check = 0 error / 0 warning；负例（锚点被覆盖丢失）正确报 W6、重新注入即恢复；重复注入不叠加（START 标记恒为 1）。
+- 2026-10-26：**v1.2 升级（用户明确需求：让 AI 自动存取记忆、并长期记住自己有记忆库）**。① `rules.md` 由 R1–R10 扩到 **R1–R13**：R11 自动触发（保存 T1–T11 / 读取 U1–U8 / 每轮判定流程 / 只对确认主人开放）、R12 留存分级（永久·长期·中期·会话态 + 四问判据 + 必写不写清单 + 降级归档）、R13 常驻锚点（注入 / 校验 / 换环境重注 / 不写库内容）。② 新增 `references/auto-trigger.md`、`references/retention-spec.md`。③ 新增 `assets/templates/memory-anchor.md` 与 `scripts/memory_anchor.py`（`--inject` / `--check` / `--check-all` / `--remove` / `--print`，幂等且不破坏目标文件原内容）。④ `memory_init.py` 加 `--anchor-target`（可多次）与 `auto_trigger` / `session_wrapup_scan` 配置；`memory_check.py` 加 **W6 锚点校验**、R 编号检查扩到 R13。⑤ 冒烟：init（含锚点注入）→ 2 事件（含 `retention` 字段）→ rebuild → check = 0 error / 0 warning；负例（锚点被覆盖丢失）正确报 W6、重新注入即恢复；重复注入不叠加（START 标记恒为 1）。
 
 - 2026-10-26：**v1.3 升级（用户明确需求：给常驻上下文瘦身）**。① 记忆目录拆为深浅两层：**深层** `main/index.md`（近期 + 重要，常驻必读）、**浅层** `main/index-shallow.md`（久远 + 日常，按需读）；新事件**默认进深层**，久远（超 `deep_window_days`，默认 90 天）且不重要的在 rebuild 时自动下沉；★**事件文件不移动，只迁移目录行**，故 `links.md` 关联完全不受影响。② 新增 **R14 目录分层规范**（7 条）、`references/index-tiering.md`、`scripts/memory_tier.py`（plan / stats / pin / unpin / promote / demote）；事件模板新增 `importance` 与 `pinned` 字段。③ 检索漏斗由三级扩为**四级**：L0 常驻 → L1 深层 → L1.5 浅层 → L2 向量。④ 脚本：`memory_index.py` 支持双层 rebuild 与 `--stats`；`memory_check.py` 的 E4 改为跨两层统计，新增 **E6 重复登记**、**W7 深层过长**；`memory_init.py` 生成 `index-shallow.md` 与 `deep_window_days` 配置。⑤ 技能由 `three-layer-memory` 更名为 **`agent-memory-skill`**（中文名：Agent 记忆系统技能）。⑥ 冒烟：3 事件（近期 / 久远普通 / 久远重要）→ rebuild 自动分层为深层 2 + 浅层 1；`--demote` 下沉、`--promote` 拉回均生效；check = 0 error。

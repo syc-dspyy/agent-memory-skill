@@ -243,12 +243,12 @@ agent-memory-skill/
 │   ├── memory_index.py             目录索引重建（双层 + --stats）
 │   └── memory_check.py             校验（含 W6 锚点、E6 重复登记、W7 深层过长）
 └── assets/templates/
-    ├── persona.md.tmpl             人格四段
-    ├── rules.md.tmpl               规范规则 R1–R14
-    ├── memory-anchor.md.tmpl       ★v1.2 常驻锚点
-    ├── event.md.tmpl               事件五段（含 retention / importance 字段）
-    ├── methodology.md.tmpl         方法论 SOP
-    └── qa-template.md.tmpl         问答模板
+    ├── persona.md       人格四段
+    ├── rules.md         规范规则 R1–R15
+    ├── memory-anchor.md ★v1.2 常驻锚点
+    ├── event.md         事件五段（含 retention / importance 字段）
+    ├── methodology.md   方法论 SOP
+    └── qa-template.md   问答模板
 ```
 
 ---
@@ -256,7 +256,7 @@ agent-memory-skill/
 ## 十、v1.2 用户升级须知
 
 1. 覆盖 `scripts/`、`references/`、`assets/` 全部文件
-2. `main/rules.md` 追加 **R14 目录分层** 一段（从 `assets/templates/rules.md.tmpl` 拷）
+2. `main/rules.md` 追加 **R14 目录分层** 一段（从 `assets/templates/rules.md` 拷）
 3. 跑一次 `memory_index.py --rebuild`，会自动生成 `main/index-shallow.md` 并完成分层
 4. 跑 `memory_check.py`，确认 0 error、W6 通过
 

@@ -67,7 +67,7 @@ ANCHOR_FALLBACK = """<!-- MEMORY-ANCHOR:START · 由 agent-memory-skill 生成 �
 
 def build_anchor(root, name=""):
     """从模板生成锚点文本，模板缺失则用内置简版。"""
-    path = os.path.join(TPL_DIR, "memory-anchor.md.tmpl")
+    path = os.path.join(TPL_DIR, "memory-anchor.md")
     try:
         with open(path, "r", encoding="utf-8") as f:
             tpl = f.read()
